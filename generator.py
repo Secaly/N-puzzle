@@ -31,8 +31,9 @@ def make_goal(size):
     return puzzle
 
 
-def make_puzzle(puzzle, size, solvable=True):
+def make_puzzle(size, solvable=True):
     random.seed()
+    puzzle = make_goal(size)
     for x, y in itertools.product(range(size), repeat=2):
         if puzzle[x][y] == 0:
             zero = (x, y)

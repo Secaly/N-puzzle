@@ -1,9 +1,47 @@
+import sys
+import copy
 import itertools
 import generator
-import random
 
 
 MOVE = {'U': (-1, 0), 'D': (1, 0), 'L': (0, -1), 'R': (0, 1)}
+
+
+def array2d_to_array1d(array_2d, size):
+
+    array_1d = []
+
+    for x in range(size):
+        for y in range(size):
+            array_1d.append(array_2d[x][y])
+
+    return(array_1d)
+
+
+def is_solvable(puzzle, goal, size):
+
+    puzzle_1d = array2d_to_array1d(puzzle, size)
+    goal_1d = array2d_to_array1d(goal, size)
+
+    n = 0
+
+    for value in goal_1d:
+        for prev_value, next_value \
+                in itertools.product(puzzle_1d[:puzzle_1d.index(value)],
+                                     goal_1d[goal_1d.index(value):]):
+            if prev_value == next_value:
+                n += 1
+
+    x_puzzle, y_puzzle = find_number(puzzle, size, 0)
+    x_goal, y_goal = find_number(goal, size, 0)
+
+    print(n)
+
+    if n % 2 == (abs(x_puzzle - x_goal) + abs(y_puzzle - y_goal)) % 2:
+        print('ok')
+        return True
+
+    return False
 
 
 def find_number(puzzle, size, number):
@@ -82,6 +120,34 @@ def state_already_view(state, distance, opened, closed):
     return False
 
 
+def astar_rec(opened, goal, size, depth_max=1, depth=0):
+    print('depth:', depth, ", depth_max:", depth_max)
+    print([(dis, puzz) for dis, puzz in list(opened.items())])
+    print()
+    if opened:
+        cur_state = opened[min(opened)].pop(0)
+    else:
+        print('depth_max + 1')
+        return None
+        # astar_rec(, goal, size, depth_max + 1, 0)
+    if not opened[min(opened)]:
+        del(opened[min(opened)])
+    if cur_state[0] == goal:
+        return cur_state
+    elif depth > depth_max:
+        return astar_rec(opened, goal, size, depth_max, 0)
+    else:
+        next_opened = {}
+        for state in next_states(cur_state, size):
+            distance = manhattan_distance(state[0], goal, size)
+            if distance in next_opened:
+                next_opened[distance].append(state)
+            else:
+                next_opened[distance] = [state]
+        return astar_rec(next_opened, goal, size, depth_max,
+                         depth + 1)
+
+
 def astar(puzzle, goal, size):
     opened = {manhattan_distance(puzzle, goal, size): [[puzzle, []]]}
     closed = []
@@ -90,6 +156,7 @@ def astar(puzzle, goal, size):
 
     while opened:
         if succes:
+            return succes
             for distance in list(opened.keys()):
                 i = 0
                 while i < len(opened[distance]):
@@ -112,13 +179,15 @@ def astar(puzzle, goal, size):
             closed.append(cur_state[0])
             for state in next_states(cur_state, size):
                 distance = manhattan_distance(state[0], goal, size)
-                if state[0] == goal or not state_already_view(state, distance, opened, closed):
+                if state[0] == goal or not state_already_view(state, distance,
+                                                              opened, closed):
                     if distance in opened:
                         opened[distance].append(state)
                     else:
                         opened[distance] = [state]
                 else:
-                    if len(state[1]) + distance > len(cur_state[1]) + 1 + distance:
+                    if len(state[1]) + distance > len(cur_state[1]) + \
+                            1 + distance:
                         state[1] = cur_state[1] + state[-1]
                         if state[0] in closed:
                             closed.pop(state[0])
@@ -133,11 +202,16 @@ def astar(puzzle, goal, size):
         print(len(succes[1]))
 
 
-size = 3
-goal = generator.make_goal(size)
-puzzle = generator.make_puzzle(size)
-# puzzle = [[1, 0],
-#           [3, 2]]
-[print(puzzle[i]) for i in range(size)]
-print('manhattan:', manhattan_distance(puzzle, goal, size))
-astar(puzzle, goal, size)
+if __name__ == '__main__':
+    # sys.setrecursionlimit(1000000)
+    size = 5
+    goal = generator.make_goal(size)
+    puzzle = generator.make_puzzle(size)
+    # puzzle = [[4, 2, 1],
+    #           [6, 0, 3],
+    #           [8, 7, 5]]
+    [print(puzzle[i]) for i in range(size)]
+    print('manhattan:', manhattan_distance(puzzle, goal, size))
+    # print(astar(puzzle, goal, size))
+    print(astar_rec({manhattan_distance(puzzle, goal, size): [[puzzle, []]]},
+                    goal, size))

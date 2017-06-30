@@ -1,5 +1,5 @@
 import sys
-import copy
+import pickle
 import itertools
 import generator
 
@@ -58,6 +58,15 @@ def manhattan_distance(puzzle, goal, size):
         x_puzzle, y_puzzle = find_number(puzzle, size, goal[x][y])
         distance += abs(x - x_puzzle) + abs(y - y_puzzle)
 
+        # if x == x_puzzle and goal[x][y] and \
+        #         [(goal[x][i], puzzle[x][j]) for i in range(y + 1, size)
+        #          for j in range(0, y_puzzle) if goal[x][i] == puzzle[x][j]]:
+        #     distance += 2
+        # if y == y_puzzle and goal[x][y] and \
+        #         [(goal[i][y], puzzle[j][y]) for i in range(x + 1, size)
+        #          for j in range(0, x_puzzle) if goal[i][y] == puzzle[j][y]]:
+        #     distance += 2
+
     return distance
 
 
@@ -87,31 +96,38 @@ def reliable_move(move_1, move_2):
     return False
 
 
-def next_states(cur_state, size):
+def next_states(cur_state, size, redundants):
     x, y = find_number(cur_state[0], size, 0)
-    last_move = ''
-    if cur_state[1]:
-        last_move = cur_state[1][-1]
+
     move_possible = []
-    if x != 0 and reliable_move('U', last_move):
+    if x != 0 and not [redundant for redundant in redundants['U']
+                       if cur_state[1][-len(redundant):] == redundant]:
         move_possible.append('U')
-    if y != 0 and reliable_move('L', last_move):
+    if y != 0 and not [redundant for redundant in redundants['L']
+                       if cur_state[1][-len(redundant):] == redundant]:
         move_possible.append('L')
-    if x != size - 1 and reliable_move('D', last_move):
+    if x != size - 1 and not [redundant for redundant in redundants['D']
+                              if cur_state[1][-len(redundant):] == redundant]:
         move_possible.append('D')
-    if y != size - 1 and reliable_move('R', last_move):
+    if y != size - 1 and not [redundant for redundant in redundants['R']
+                              if cur_state[1][-len(redundant):] == redundant]:
         move_possible.append('R')
+
+    # for i in range(1, len(cur_state[1])):
+    #     for move in move_possible:
+    #         if cur_state[1][-i:] in redundants[move]:
+    #             move_possible.remove(move)
 
     next_states = [[[[cur_state[0][x][y] for y in range(size)]
                     for x in range(size)],
                     [cur_move for cur_move in cur_state[1]] + [move]]
                    for move in move_possible]
     return [[move_piece(next_states[i][0], x, y, MOVE[next_states[i][1][-1]]),
-             next_states[i][1]] for i in range(len(next_states))]
+             next_states[i][1], cur_state[2]] for i in range(len(next_states))]
 
 
 def state_already_view(state, distance, opened, closed):
-    if distance in opened:
+    for distance in opened:
         for open_state in opened[distance]:
             if state[0] == open_state[0]:
                 return True
@@ -120,98 +136,133 @@ def state_already_view(state, distance, opened, closed):
     return False
 
 
-def astar_rec(opened, goal, size, depth_max=1, depth=0):
-    print('depth:', depth, ", depth_max:", depth_max)
-    print([(dis, puzz) for dis, puzz in list(opened.items())])
-    print()
-    if opened:
-        cur_state = opened[min(opened)].pop(0)
-    else:
-        print('depth_max + 1')
+def distance_change(puzzle, move, goal, size):
+    x0, y0 = find_number(puzzle, size, 0)
+    x0_goal, y0_goal = find_number(goal, size, 0)
+    dist_0_cur = abs(x0 - x0_goal) + abs(y0 - y0_goal)
+    dist_0_next = abs(x0 - move[0] - x0_goal) + abs(y0 - move[1] - y0_goal)
+
+    number = puzzle[x0 - move[0]][y0 - move[1]]
+    xnumber_goal, ynumber_goal = find_number(goal, size, number)
+    dist_number_cur = abs(x0 - move[0] - xnumber_goal) + \
+        abs(y0 - move[1] - ynumber_goal)
+    dist_number_next = abs(x0 - xnumber_goal) + abs(y0 - ynumber_goal)
+
+    return -(dist_0_next - dist_0_cur + dist_number_next - dist_number_cur)
+
+
+def function_rec(state, goal, size, redundants, depth_max, depth=0):
+    if state[0] == goal:
+        return state
+    if depth >= depth_max:
         return None
-        # astar_rec(, goal, size, depth_max + 1, 0)
-    if not opened[min(opened)]:
-        del(opened[min(opened)])
-    if cur_state[0] == goal:
-        return cur_state
-    elif depth > depth_max:
-        return astar_rec(opened, goal, size, depth_max, 0)
-    else:
-        next_opened = {}
-        for state in next_states(cur_state, size):
-            distance = manhattan_distance(state[0], goal, size)
-            if distance in next_opened:
-                next_opened[distance].append(state)
-            else:
-                next_opened[distance] = [state]
-        return astar_rec(next_opened, goal, size, depth_max,
-                         depth + 1)
+
+    opened = sorted(next_states(state, size, redundants),
+                    key=lambda x: distance_change(x[0], MOVE[x[1][-1]], goal,
+                                                  size))
+    for state in opened:
+        next_state = function_rec(state, goal, size, redundants, depth_max,
+                                  depth + 1)
+        if next_state:
+            return next_state
+
+
+def astar_rec(puzzle, goal, size):
+    distance = manhattan_distance(puzzle, goal, size)
+    depth_max = distance / 2
+    opened = [puzzle, []]
+    success = None
+    with open('redundant_move.txt', mode='rb') as f:
+        redundants = pickle.load(f)
+    while not success:
+        print(depth_max)
+        success = function_rec(opened, goal, size, redundants, depth_max)
+        if not success:
+            depth_max += 1
+    return success
+
+
+def find_min_path(states):
+    min_index = 0
+    min_path = states[min_index][2]
+    for i in range(1, len(states)):
+        if states[i][2] < min_path:
+            min_index = i
+            min_path = states[i][2]
+    return min_index
 
 
 def astar(puzzle, goal, size):
-    opened = {manhattan_distance(puzzle, goal, size): [[puzzle, []]]}
+    distance_init = manhattan_distance(puzzle, goal, size)
+    opened = {distance_init / 2: [[puzzle, [], distance_init / 2]]}
     closed = []
-    succes = None
-    num_succes = 1
+    success = None
+    with open('redundant_move_7_12.txt', mode='rb') as f:
+        redundants = pickle.load(f)
 
-    while opened:
-        if succes:
-            return succes
-            for distance in list(opened.keys()):
-                i = 0
-                while i < len(opened[distance]):
-                    if len(succes[1]) < len(opened[distance][i][1]):
-                        closed.append(opened[distance].pop(i)[0])
-                    else:
-                        i += 1
-                if not opened[distance]:
-                    del(opened[distance])
+    while opened and not success:
+        distance = min(opened)
+        index = find_min_path(opened[distance])
+        [print(distance, len(state[1]), state[1]) for state in opened[distance]]
+        print()
+        cur_state = opened[distance].pop(index)
+        if not opened[distance]:
+            del(opened[distance])
+        if cur_state[0] == goal:
+            success = cur_state
+            # print(success[1])
+            # print(len(success[1]))
+            # print()
+        # if success:
+        #     for distance, states in list(opened.items()):
+        #         for state in states:
+        #             if len(state[1]) >= len(success[1]) - 2:
+        #                 opened[distance].remove(state)
+        #         if not opened[distance]:
+        #             del(opened[distance])
 
-        if opened:
-            cur_state = opened[min(opened)].pop(0)
-            if not opened[min(opened)]:
-                del(opened[min(opened)])
-            if cur_state[0] == goal:
-                succes = cur_state
-                print(num_succes, len(succes[1]))
-                num_succes += 1
-
-            closed.append(cur_state[0])
-            for state in next_states(cur_state, size):
-                distance = manhattan_distance(state[0], goal, size)
-                if state[0] == goal or not state_already_view(state, distance,
-                                                              opened, closed):
-                    if distance in opened:
-                        opened[distance].append(state)
-                    else:
-                        opened[distance] = [state]
+        closed.append(cur_state[0])
+        for state in next_states(cur_state, size, redundants):
+            state[2] += distance_change(state[0], MOVE[state[1][-1]], goal,
+                                        size) / 2
+            distance_cur = state[2] + len(state[1])
+            if not state_already_view(state, distance_cur, opened, closed):
+                    # or state[0] == goal:
+                if distance_cur in opened:
+                    opened[distance_cur].append(state)
                 else:
-                    if len(state[1]) + distance > len(cur_state[1]) + \
-                            1 + distance:
-                        state[1] = cur_state[1] + state[-1]
-                        if state[0] in closed:
-                            closed.pop(state[0])
-                            if distance in opened:
-                                opened[distance].append(state)
-                            else:
-                                opened[distance] = [state]
+                    opened[distance_cur] = [state]
 
-    if succes:
-        [print(succes[0][i]) for i in range(size)]
-        print(succes[1])
-        print(len(succes[1]))
+    if success:
+        [print(success[0][i]) for i in range(size)]
+        print(success[1])
+        print(len(success[1]))
 
 
 if __name__ == '__main__':
     # sys.setrecursionlimit(1000000)
-    size = 5
+    size = 4
     goal = generator.make_goal(size)
     puzzle = generator.make_puzzle(size)
-    # puzzle = [[4, 2, 1],
-    #           [6, 0, 3],
-    #           [8, 7, 5]]
+    # puzzle = [[4, 6, 8],
+    #           [1, 0, 7],
+    #           [2, 3, 5]]
+    # puzzle = [[1, 2, 3],
+    #           [0, 8, 4],
+    #           [7, 6, 5]]
+    puzzle = [[5, 0, 9, 7],
+              [12, 15, 3, 6],
+              [2, 4, 11, 13],
+              [8, 1, 14, 10]]
+    # puzzle = [[1, 2, 3, 4, 5],
+    #           [16, 17, 22, 19, 6],
+    #           [15, 20, 0, 24, 7],
+    #           [14, 23, 18, 21, 8],
+    #           [13, 12, 11, 10, 9]]
     [print(puzzle[i]) for i in range(size)]
     print('manhattan:', manhattan_distance(puzzle, goal, size))
-    # print(astar(puzzle, goal, size))
-    print(astar_rec({manhattan_distance(puzzle, goal, size): [[puzzle, []]]},
-                    goal, size))
+    if is_solvable(puzzle, goal, size):
+        print(astar(puzzle, goal, size))
+        # print(astar_rec(puzzle, goal, size))
+    else:
+        print('Puzzle not solvable.')

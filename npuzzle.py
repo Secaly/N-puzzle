@@ -151,10 +151,80 @@ def astar(puzzle, goal, size, greedy=True):
             opened.append(state)
 
 
+def astar_rev(puzzle, goal, size, greedy=True):
+    distance_init = manhattan_distance(puzzle, goal, size)
+    opened_start = [[puzzle, [], distance_init / 2, distance_init / 2]]
+    closed_start = []
+    opened_end = [[goal, [], distance_init / 2, distance_init / 2]]
+    closed_end = []
+    with open('redundant_move_7_12.txt', mode='rb') as f:
+        redundants = pickle.load(f)
+
+    while opened_start and opened_end:
+        if greedy:
+            opened_start.sort(key=lambda x: (x[2], x[3]))
+            opened_end.sort(key=lambda x: (x[2], x[3]))
+        else:
+            opened_start.sort(key=lambda x: (x[3], x[2]))
+            opened_end.sort(key=lambda x: (x[3], x[2]))
+        # [print(state) for state in opened_start]
+        # print()
+        # [print(state) for state in closed_start]
+        # print()
+        # [print(state) for state in opened_end]
+        # print()
+        # [print(state) for state in closed_end]
+        # print()
+        # print()
+        cur_state_start = opened_start.pop(0)
+        cur_state_end = opened_end.pop(0)
+        if cur_state_start[0] == goal:
+            print(cur_state_start)
+            return 0
+        elif cur_state_end[0] == puzzle:
+            print(cur_state_end)
+            return 0
+        elif cur_state_start[0] == cur_state_end[0]:
+            print(cur_state_start)
+            print(cur_state_end)
+            return 0
+
+        end_join = [state for state in opened_end + closed_end
+                    if cur_state_start[0] == state[0]]
+        if end_join:
+            print(cur_state_start)
+            print(end_join[0])
+            return 0
+
+        start_join = [state for state in opened_start + closed_start
+                      if cur_state_end[0] == state[0]]
+        if start_join:
+            print(start_join)
+            print(cur_state_end)
+            return 0
+
+        closed_start.append(cur_state_start)
+        for state in next_states(cur_state_start, size, redundants):
+            state[2] += distance_change(state[0], MOVE[state[1][-1]], goal,
+                                        size) / 2
+            state[3] = state[2] + len(state[1])
+            opened_start.append(state)
+
+        closed_end.append(cur_state_end)
+        for state in next_states(cur_state_end, size, redundants):
+            state[2] += distance_change(state[0], MOVE[state[1][-1]], goal,
+                                        size) / 2
+            state[3] = state[2] + len(state[1])
+            opened_end.append(state)
+
+
 if __name__ == '__main__':
     size = 3
     goal = generator.make_goal(size)
     puzzle = generator.make_puzzle(size)
+    # puzzle = [[4, 1, 3],
+    #           [0, 7, 5],
+    #           [2, 8, 6]]
     # puzzle = [[4, 6, 8],
     #           [1, 0, 7],
     #           [2, 3, 5]]
@@ -170,7 +240,8 @@ if __name__ == '__main__':
     [print(puzzle[i]) for i in range(size)]
     print('manhattan:', manhattan_distance(puzzle, goal, size))
     if is_solvable(puzzle, goal, size):
-        success = astar(puzzle, goal, size, False)
+        success = astar(puzzle, goal, size)
         print(len(success[1]), '\n', success[1])
+        astar_rev(puzzle, goal, size, False)
     else:
         print('Puzzle not solvable.')

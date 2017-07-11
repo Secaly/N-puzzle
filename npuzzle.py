@@ -124,102 +124,100 @@ def distance_change(puzzle, move, goal, size):
     return -(dist_0_next - dist_0_cur + dist_number_next - dist_number_cur)
 
 
-def astar(puzzle, goal, size, greedy=True):
+def astar(puzzle, goal, size):
     distance_init = manhattan_distance(puzzle, goal, size)
-    opened = [[puzzle, [], distance_init / 2, distance_init / 2]]
+    opened = [[puzzle, [], distance_init, distance_init]]
     closed = []
+    number_opened = 1
+    number_selected = 0
     with open('redundant_move_7_12.txt', mode='rb') as f:
         redundants = pickle.load(f)
 
     while opened:
-        if greedy:
-            opened.sort(key=lambda x: (x[2], x[3]))
-        else:
-            opened.sort(key=lambda x: (x[3], x[2]))
-        # [print(len(state[1]), state[1], state[2], state[3])
-        #  for state in opened]
-        # print()
+        opened.sort(key=lambda x: (x[2], x[3]))
         cur_state = opened.pop(0)
+        number_selected += 1
         if cur_state[0] == goal:
-            return (cur_state)
+            return cur_state[1], number_selected, number_opened
 
         closed.append(cur_state)
         for state in next_states(cur_state, size, redundants):
             state[2] += distance_change(state[0], MOVE[state[1][-1]], goal,
-                                        size) / 2
+                                        size)
             state[3] = state[2] + len(state[1])
             opened.append(state)
+            number_opened += 1
 
 
-def astar_rev(puzzle, goal, size, greedy=True):
+def join_path(state_start, state_end):
+    reverse = {'L': 'R', 'R': 'L', 'U': 'D', 'D': 'U'}
+    for i in range(len(state_end)):
+        state_start += reverse[state_end[-i - 1]]
+    return state_start
+
+
+def astar_bidirectionnal(puzzle, goal, size):
     distance_init = manhattan_distance(puzzle, goal, size)
-    opened_start = [[puzzle, [], distance_init / 2, distance_init / 2]]
+    opened_start = [[puzzle, [], distance_init, distance_init]]
     closed_start = []
-    opened_end = [[goal, [], distance_init / 2, distance_init / 2]]
+    opened_end = [[goal, [], distance_init, distance_init]]
     closed_end = []
+    number_opened = 2
+    number_selected = 0
     with open('redundant_move_7_12.txt', mode='rb') as f:
         redundants = pickle.load(f)
 
     while opened_start and opened_end:
-        if greedy:
-            opened_start.sort(key=lambda x: (x[2], x[3]))
-            opened_end.sort(key=lambda x: (x[2], x[3]))
-        else:
-            opened_start.sort(key=lambda x: (x[3], x[2]))
-            opened_end.sort(key=lambda x: (x[3], x[2]))
-        # [print(state) for state in opened_start]
-        # print()
-        # [print(state) for state in closed_start]
-        # print()
-        # [print(state) for state in opened_end]
-        # print()
-        # [print(state) for state in closed_end]
-        # print()
-        # print()
+        opened_start.sort(key=lambda x: (x[3], x[2]))
+        opened_end.sort(key=lambda x: (x[3], x[2]))
+
         cur_state_start = opened_start.pop(0)
         cur_state_end = opened_end.pop(0)
+        number_selected += 2
+
         if cur_state_start[0] == goal:
-            print(cur_state_start)
-            return 0
+            success = join_path(cur_state_start[1], [])
+            break
         elif cur_state_end[0] == puzzle:
-            print(cur_state_end)
-            return 0
+            success = join_path([], cur_state_end[1])
+            break
         elif cur_state_start[0] == cur_state_end[0]:
-            print(cur_state_start)
-            print(cur_state_end)
-            return 0
+            success = join_path(cur_state_start[1], cur_state_end[1])
+            break
 
         end_join = [state for state in opened_end + closed_end
                     if cur_state_start[0] == state[0]]
         if end_join:
-            print(cur_state_start)
-            print(end_join[0])
-            return 0
+            success = join_path(cur_state_start[1], end_join[0][1])
+            break
 
         start_join = [state for state in opened_start + closed_start
                       if cur_state_end[0] == state[0]]
         if start_join:
-            print(start_join)
-            print(cur_state_end)
-            return 0
+            success = join_path(start_join[0][1], cur_state_end[1])
+            break
 
         closed_start.append(cur_state_start)
         for state in next_states(cur_state_start, size, redundants):
             state[2] += distance_change(state[0], MOVE[state[1][-1]], goal,
-                                        size) / 2
+                                        size)
             state[3] = state[2] + len(state[1])
             opened_start.append(state)
+            number_opened += 1
 
         closed_end.append(cur_state_end)
         for state in next_states(cur_state_end, size, redundants):
             state[2] += distance_change(state[0], MOVE[state[1][-1]], goal,
-                                        size) / 2
+                                        size)
             state[3] = state[2] + len(state[1])
             opened_end.append(state)
+            number_opened += 1
+
+    return success, number_selected, number_opened
 
 
 if __name__ == '__main__':
-    size = 3
+    size = 4
     goal = generator.make_goal(size)
     puzzle = generator.make_puzzle(size)
     # puzzle = [[4, 1, 3],
@@ -228,10 +226,10 @@ if __name__ == '__main__':
     # puzzle = [[4, 6, 8],
     #           [1, 0, 7],
     #           [2, 3, 5]]
-    # puzzle = [[5, 0, 9, 7],
-    #           [12, 15, 3, 6],
-    #           [2, 4, 11, 13],
-    #           [8, 1, 14, 10]]
+    puzzle = [[5, 0, 9, 7],
+              [12, 15, 3, 6],
+              [2, 4, 11, 13],
+              [8, 1, 14, 10]]
     # puzzle = [[1, 2, 3, 4, 5],
     #           [16, 17, 22, 19, 6],
     #           [15, 20, 0, 24, 7],
@@ -240,8 +238,10 @@ if __name__ == '__main__':
     [print(puzzle[i]) for i in range(size)]
     print('manhattan:', manhattan_distance(puzzle, goal, size))
     if is_solvable(puzzle, goal, size):
-        success = astar(puzzle, goal, size)
-        print(len(success[1]), '\n', success[1])
-        astar_rev(puzzle, goal, size, False)
+        path, number_selected, number_opened = astar(puzzle, goal, size)
+        print(number_selected, number_opened, len(path), '\n', path)
+        path, number_selected, number_opened = astar_bidirectionnal(puzzle,
+                                                                    goal, size)
+        print(number_selected, number_opened, len(path), '\n', path)
     else:
         print('Puzzle not solvable.')

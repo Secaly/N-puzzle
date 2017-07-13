@@ -48,6 +48,21 @@ def find_number(puzzle, size, number):
     return x, y
 
 
+def manhattan_distance_change(puzzle, move, goal, size):
+    x0, y0 = find_number(puzzle, size, 0)
+    x0_goal, y0_goal = find_number(goal, size, 0)
+    dist_0_cur = abs(x0 - x0_goal) + abs(y0 - y0_goal)
+    dist_0_next = abs(x0 - move[0] - x0_goal) + abs(y0 - move[1] - y0_goal)
+
+    number = puzzle[x0 - move[0]][y0 - move[1]]
+    xnumber_goal, ynumber_goal = find_number(goal, size, number)
+    dist_number_cur = abs(x0 - move[0] - xnumber_goal) + \
+        abs(y0 - move[1] - ynumber_goal)
+    dist_number_next = abs(x0 - xnumber_goal) + abs(y0 - ynumber_goal)
+
+    return -(dist_0_next - dist_0_cur + dist_number_next - dist_number_cur)
+
+
 def manhattan_distance(puzzle, goal, size):
     distance = 0
     for x, y in itertools.product(range(size), repeat=2):
@@ -55,6 +70,62 @@ def manhattan_distance(puzzle, goal, size):
         distance += abs(x - x_puzzle) + abs(y - y_puzzle)
 
     return distance
+
+
+def row_column_distance_change(puzzle, move, goal, size):
+    distance_change = 0
+
+    x0_puzzle, y0_puzzle = find_number(puzzle, size, 0)
+    xn_puzzle, yn_puzzle = x0_puzzle - move[0], y0_puzzle - move[1]
+
+    x0_goal = int(size / 2) if size % 2 else int((size + 1) / 2)
+    y0_goal = int(size / 2)
+    xn_goal, yn_goal = find_number(goal, size, puzzle[xn_puzzle][yn_puzzle])
+
+    if x0_puzzle == x0_goal and xn_puzzle != x0_goal or \
+            xn_puzzle == xn_goal and x0_puzzle != xn_goal:
+        distance_change -= 1
+    elif x0_puzzle != x0_goal and xn_puzzle == x0_goal or\
+            xn_puzzle != xn_goal and x0_puzzle == xn_goal:
+        distance_change += 1
+
+    if y0_puzzle == y0_goal and yn_puzzle != y0_goal or \
+            yn_puzzle == yn_goal and y0_puzzle != yn_goal:
+        distance_change -= 1
+    elif y0_puzzle != y0_goal and yn_puzzle == y0_goal or\
+            yn_puzzle != yn_goal and y0_puzzle == yn_goal:
+        distance_change += 1
+
+    return distance_change
+
+
+def row_column_distance(puzzle, goal, size):
+    distance = 0
+
+    for i in range(size):
+        for j in range(size):
+            if puzzle[i][j] not in goal[i]:
+                distance += 1
+            if puzzle[i][j] not in [goal[x][j] for x in range(size)]:
+                distance += 1
+    return distance
+
+
+def hamming_distance_change(puzzle, move, goal, size):
+    distance_change = 0
+    x0, y0 = find_number(puzzle, size, 0)
+
+    if goal[x0][y0] == 0:
+        distance_change -= 1
+    elif goal[x0 - move[0]][y0 - move[1]] == 0:
+        distance_change += 1
+
+    if goal[x0 - move[0]][y0 - move[1]] == puzzle[x0 - move[0]][y0 - move[1]]:
+        distance_change -= 1
+    elif goal[x0][y0] == puzzle[x0 - move[0]][y0 - move[1]]:
+        distance_change += 1
+
+    return distance_change
 
 
 def hamming_distance(puzzle, goal, size):
@@ -109,23 +180,8 @@ def next_states(cur_state, size, redundants):
             for i in range(len(next_states))]
 
 
-def distance_change(puzzle, move, goal, size):
-    x0, y0 = find_number(puzzle, size, 0)
-    x0_goal, y0_goal = find_number(goal, size, 0)
-    dist_0_cur = abs(x0 - x0_goal) + abs(y0 - y0_goal)
-    dist_0_next = abs(x0 - move[0] - x0_goal) + abs(y0 - move[1] - y0_goal)
-
-    number = puzzle[x0 - move[0]][y0 - move[1]]
-    xnumber_goal, ynumber_goal = find_number(goal, size, number)
-    dist_number_cur = abs(x0 - move[0] - xnumber_goal) + \
-        abs(y0 - move[1] - ynumber_goal)
-    dist_number_next = abs(x0 - xnumber_goal) + abs(y0 - ynumber_goal)
-
-    return -(dist_0_next - dist_0_cur + dist_number_next - dist_number_cur)
-
-
-def astar(puzzle, goal, size):
-    distance_init = manhattan_distance(puzzle, goal, size)
+def astar(puzzle, goal, size, distance, distance_change):
+    distance_init = distance(puzzle, goal, size)
     opened = [[puzzle, [], distance_init, distance_init]]
     closed = []
     number_opened = 1
@@ -134,7 +190,11 @@ def astar(puzzle, goal, size):
         redundants = pickle.load(f)
 
     while opened:
-        opened.sort(key=lambda x: (x[2], x[3]))
+        opened.sort(key=lambda x: (x[2], len(x[1])))
+
+        # [print(state) for state in opened]
+        # print()
+
         cur_state = opened.pop(0)
         number_selected += 1
         if cur_state[0] == goal:
@@ -156,8 +216,9 @@ def join_path(state_start, state_end):
     return state_start
 
 
-def astar_bidirectionnal(puzzle, goal, size):
-    distance_init = manhattan_distance(puzzle, goal, size)
+def astar_bidirectionnal(puzzle, goal, size, distance, distance_change,
+                         greedy=True):
+    distance_init = distance(puzzle, goal, size)
     opened_start = [[puzzle, [], distance_init, distance_init]]
     closed_start = []
     opened_end = [[goal, [], distance_init, distance_init]]
@@ -168,8 +229,18 @@ def astar_bidirectionnal(puzzle, goal, size):
         redundants = pickle.load(f)
 
     while opened_start and opened_end:
-        opened_start.sort(key=lambda x: (x[3], x[2]))
-        opened_end.sort(key=lambda x: (x[3], x[2]))
+        if greedy:
+            opened_start.sort(key=lambda x: (x[2], len(x[1])))
+            opened_end.sort(key=lambda x: (x[2], len(x[1])))
+        else:
+            opened_start.sort(key=lambda x: (len(x[1]), x[2]))
+            opened_end.sort(key=lambda x: (len(x[1]), x[2]))
+
+        # [print(state) for state in opened_start]
+        # print()
+        # [print(state) for state in opened_end]
+        # print()
+        # print()
 
         cur_state_start = opened_start.pop(0)
         cur_state_end = opened_end.pop(0)
@@ -217,31 +288,46 @@ def astar_bidirectionnal(puzzle, goal, size):
 
 
 if __name__ == '__main__':
-    size = 4
+    size = 3
+    heuristic = 'row_column'
     goal = generator.make_goal(size)
     puzzle = generator.make_puzzle(size)
-    # puzzle = [[4, 1, 3],
-    #           [0, 7, 5],
+    # puzzle = [[4, 3, 0],
+    #           [7, 1, 5],
     #           [2, 8, 6]]
-    # puzzle = [[4, 6, 8],
-    #           [1, 0, 7],
-    #           [2, 3, 5]]
-    puzzle = [[5, 0, 9, 7],
-              [12, 15, 3, 6],
-              [2, 4, 11, 13],
-              [8, 1, 14, 10]]
+    puzzle = [[4, 6, 8],
+              [1, 0, 7],
+              [2, 3, 5]]
+    # puzzle = [[5, 0, 9, 7],
+    #           [12, 15, 3, 6],
+    #           [2, 4, 11, 13],
+    #           [8, 1, 14, 10]]
     # puzzle = [[1, 2, 3, 4, 5],
     #           [16, 17, 22, 19, 6],
     #           [15, 20, 0, 24, 7],
     #           [14, 23, 18, 21, 8],
     #           [13, 12, 11, 10, 9]]
     [print(puzzle[i]) for i in range(size)]
+    print('hamming:', hamming_distance(puzzle, goal, size))
     print('manhattan:', manhattan_distance(puzzle, goal, size))
+    print('row_column:', row_column_distance(puzzle, goal, size))
+
+    if heuristic == 'manhattan':
+        distance = manhattan_distance
+        distance_change = manhattan_distance_change
+    elif heuristic == 'hamming':
+        distance = hamming_distance
+        distance_change = hamming_distance_change
+    elif heuristic == 'row_column':
+        distance = row_column_distance
+        distance_change = row_column_distance_change
+
     if is_solvable(puzzle, goal, size):
-        path, number_selected, number_opened = astar(puzzle, goal, size)
-        print(number_selected, number_opened, len(path), '\n', path)
-        path, number_selected, number_opened = astar_bidirectionnal(puzzle,
-                                                                    goal, size)
+        # path, number_selected, number_opened = astar_bidirectionnal(
+        #     puzzle, goal, size, distance, distance_change)
+        # print(number_selected, number_opened, len(path), '\n', path)
+        path, number_selected, number_opened = astar_bidirectionnal(
+            puzzle, goal, size, distance, distance_change)
         print(number_selected, number_opened, len(path), '\n', path)
     else:
         print('Puzzle not solvable.')

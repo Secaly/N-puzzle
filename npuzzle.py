@@ -1,7 +1,7 @@
 import pickle
 import itertools
 import generator
-
+import argparse
 
 MOVE = {'U': (-1, 0), 'D': (1, 0), 'L': (0, -1), 'R': (0, 1)}
 
@@ -25,11 +25,15 @@ def is_solvable(puzzle, goal, size):
     n = 0
 
     for value in goal_1d:
-        for prev_value, next_value \
-                in itertools.product(puzzle_1d[:puzzle_1d.index(value)],
-                                     goal_1d[goal_1d.index(value):]):
-            if prev_value == next_value:
-                n += 1
+        try:
+            for prev_value, next_value \
+                    in itertools.product(puzzle_1d[:puzzle_1d.index(value)],
+                                         goal_1d[goal_1d.index(value):]):
+                if prev_value == next_value:
+                    n += 1
+        except ValueError:
+            print('invalid file')
+            exit(0)
 
     x_puzzle, y_puzzle = find_number(puzzle, size, 0)
     x_goal, y_goal = find_number(goal, size, 0)
@@ -288,17 +292,77 @@ def astar_bidirectionnal(puzzle, goal, size, distance, distance_change,
 
 
 if __name__ == '__main__':
-    size = 3
-    heuristic = 'row_column'
+    parser = argparse.ArgumentParser(description='Choose your heuristic.',
+                                     epilog='(´・ω・`)')
+
+    parser.add_argument('heuristic', metavar='Heuristic',
+                        choices=['Manhattan', 'Hamming', 'Heuristic3'],
+                        help='Manhattan | Hamming | Heuristic3')
+
+    group = parser.add_mutually_exclusive_group()
+
+    group.add_argument(
+        '--file', nargs='?',
+        help='read a specific file and not a random generated map')
+    group.add_argument(
+        '--size', nargs='?', type=int, default=3,
+        help='change the size of the random generated map (default : 3)')
+    parser.add_argument(
+        'algorithm', metavar='Algorithm',
+        choices=['uniform-cost', 'greedy searches', 'both'],
+        help='uniform-cost | greedy searches | both')
+
+    args = parser.parse_args()
+
+    puzzle = []
+    size = 0
+
+    if not args.file:
+        puzzle = generator.make_puzzle(args.size)
+        size = args.size
+    else:
+        try:
+            with open(args.file, mode='r') as file_open:
+                for line in file_open:
+                    temp_array = []
+                    line_split = line.split()
+                    if len(puzzle) == size and size > 0 and\
+                            line_split[0][0] != '#':
+                        print('invalid file 3')
+                        exit(0)
+                    if (len(line_split) > size and
+                        line_split[size][0] == '#') or \
+                            line_split[0][0] == '#' or \
+                            len(line_split) == size or \
+                            (len(line_split) == 1 and size == 0) or \
+                            (size == 0 and len(line_split) > 1 and
+                             line_split[1][0] == '#'):
+                        if line_split[0][0] == '#':
+                            continue
+                        if size == 0:
+                            size = int(line_split[0])
+                        elif size > 0:
+                            for array in range(0, size):
+                                try:
+                                    temp_array.append(int(line_split[array]))
+                                except ValueError:
+                                    print('invalid file 1')
+                                    exit(0)
+                            puzzle.append(temp_array)
+                    else:
+                        print('invalid file 2')
+                        exit(0)
+        except OSError:
+            print('fail to open the file')
+            exit(0)
+
     goal = generator.make_goal(size)
-    puzzle = generator.make_puzzle(size)
-    # puzzle = [[4, 3, 0],
-    #           [7, 1, 5],
+    # puzzle = [[4, 1, 3],
+    #           [0, 7, 5],
     #           [2, 8, 6]]
-    puzzle = [[4, 6, 8],
-              [1, 0, 7],
-              [2, 3, 5]]
-    # puzzle = [[5, 0, 9, 7],
+    # puzzle = [[4, 6, 8],
+    #           [1, 0, 7],
+    #           [2, 3, 5]]
     #           [12, 15, 3, 6],
     #           [2, 4, 11, 13],
     #           [8, 1, 14, 10]]
@@ -307,6 +371,8 @@ if __name__ == '__main__':
     #           [15, 20, 0, 24, 7],
     #           [14, 23, 18, 21, 8],
     #           [13, 12, 11, 10, 9]]
+    heuristic = 'manhattan'
+
     [print(puzzle[i]) for i in range(size)]
     print('hamming:', hamming_distance(puzzle, goal, size))
     print('manhattan:', manhattan_distance(puzzle, goal, size))

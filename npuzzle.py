@@ -52,6 +52,44 @@ def find_number(puzzle, size, number):
     return x, y
 
 
+def nmax_swap_distance_change(puzzle, move, goal, size):
+    puzzle_before = puzzle[:]
+    x0, y0 = find_number(puzzle, size, 0)
+    puzzle_before[x0][y0], puzzle_before[x0 - move[0]][y0 - move[1]] = \
+        puzzle_before[x0 - move[0]][y0 - move[1]], puzzle_before[x0][y0]
+
+    return nmax_swap_distance(puzzle, goal, size) - \
+        nmax_swap_distance(puzzle_before, goal, size)
+
+
+def nmax_swap_distance(puzzle, goal, size):
+    puzzle_1d = array2d_to_array1d(puzzle, size)
+    goal_1d = array2d_to_array1d(goal, size)
+    location = [puzzle_1d.index(goal_1d[i]) for i in range(size * size)]
+    n = int(size / 2) * size + int((size - 1) / 2)
+    perm = 0
+
+    while puzzle_1d != goal_1d:
+
+        if location[n] == n:
+            i = 0
+            while i < size * size - 1:
+                if goal_1d[i] in puzzle_1d[i + 1:]:
+                    break
+                i += 1
+            puzzle_1d[location[i]], puzzle_1d[location[n]] = \
+                puzzle_1d[location[n]], puzzle_1d[location[i]]
+            location[i], location[n] = location[n], location[i]
+
+        else:
+            puzzle_1d[location[location[n]]], puzzle_1d[location[n]] = \
+                puzzle_1d[location[n]], puzzle_1d[location[location[n]]]
+            location[location[n]], location[n] = \
+                location[n], location[location[n]]
+        perm += 1
+    return perm
+
+
 def manhattan_distance_change(puzzle, move, goal, size):
     x0, y0 = find_number(puzzle, size, 0)
     x0_goal, y0_goal = find_number(goal, size, 0)
@@ -295,9 +333,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Choose your heuristic.',
                                      epilog='(´・ω・`)')
 
-    parser.add_argument('heuristic', metavar='Heuristic',
-                        choices=['Manhattan', 'Hamming', 'Heuristic3'],
-                        help='Manhattan | Hamming | Heuristic3')
+    parser.add_argument('heuristic', metavar='heuristic',
+                        choices=['manhattan', 'row-column', 'nmax-swap'],
+                        help='manhattan | row-column | nmax-swap')
 
     group = parser.add_mutually_exclusive_group()
 
@@ -308,9 +346,9 @@ if __name__ == '__main__':
         '--size', nargs='?', type=int, default=3,
         help='change the size of the random generated map (default : 3)')
     parser.add_argument(
-        'algorithm', metavar='Algorithm',
-        choices=['uniform-cost', 'greedy searches', 'both'],
-        help='uniform-cost | greedy searches | both')
+        'algorithm', metavar='algorithm',
+        choices=['uniform-cost', 'greedy', 'both'],
+        help='uniform-cost | greedy | both')
 
     args = parser.parse_args()
 
@@ -360,40 +398,41 @@ if __name__ == '__main__':
     # puzzle = [[4, 1, 3],
     #           [0, 7, 5],
     #           [2, 8, 6]]
-    # puzzle = [[4, 6, 8],
-    #           [1, 0, 7],
-    #           [2, 3, 5]]
-    #           [12, 15, 3, 6],
-    #           [2, 4, 11, 13],
-    #           [8, 1, 14, 10]]
+    puzzle = [[5, 6, 7],
+              [4, 0, 8],
+              [3, 2, 1]]
     # puzzle = [[1, 2, 3, 4, 5],
     #           [16, 17, 22, 19, 6],
     #           [15, 20, 0, 24, 7],
     #           [14, 23, 18, 21, 8],
     #           [13, 12, 11, 10, 9]]
-    heuristic = 'manhattan'
+    heuristic = args.heuristic
 
     [print(puzzle[i]) for i in range(size)]
     print('hamming:', hamming_distance(puzzle, goal, size))
     print('manhattan:', manhattan_distance(puzzle, goal, size))
     print('row_column:', row_column_distance(puzzle, goal, size))
 
+    print(nmax_swap_distance(puzzle, goal, size))
     if heuristic == 'manhattan':
         distance = manhattan_distance
         distance_change = manhattan_distance_change
-    elif heuristic == 'hamming':
-        distance = hamming_distance
-        distance_change = hamming_distance_change
-    elif heuristic == 'row_column':
+    elif heuristic == 'row-column':
         distance = row_column_distance
         distance_change = row_column_distance_change
+    elif heuristic == 'nmax-swap':
+        distance = nmax_swap_distance
+        distance_change = nmax_swap_distance_change
 
     if is_solvable(puzzle, goal, size):
-        # path, number_selected, number_opened = astar_bidirectionnal(
-        #     puzzle, goal, size, distance, distance_change)
-        # print(number_selected, number_opened, len(path), '\n', path)
-        path, number_selected, number_opened = astar_bidirectionnal(
-            puzzle, goal, size, distance, distance_change)
-        print(number_selected, number_opened, len(path), '\n', path)
+        algorithm = args.algorithm
+        if algorithm in ['uniform-cost', 'both']:
+            path, number_selected, number_opened = astar_bidirectionnal(
+                puzzle, goal, size, distance, distance_change, False)
+            print(number_selected, number_opened, len(path), '\n', path)
+        if algorithm in ['greedy', 'both']:
+            path, number_selected, number_opened = astar(
+                puzzle, goal, size, distance, distance_change)
+            print(number_selected, number_opened, len(path), '\n', path)
     else:
         print('Puzzle not solvable.')

@@ -52,42 +52,29 @@ def find_number(puzzle, size, number):
     return x, y
 
 
-def nmax_swap_distance_change(puzzle, move, goal, size):
-    puzzle_before = puzzle[:]
+def euclidian_distance_change(puzzle, move, goal, size):
     x0, y0 = find_number(puzzle, size, 0)
-    puzzle_before[x0][y0], puzzle_before[x0 - move[0]][y0 - move[1]] = \
-        puzzle_before[x0 - move[0]][y0 - move[1]], puzzle_before[x0][y0]
+    x0_goal, y0_goal = find_number(goal, size, 0)
+    dist_0_cur = ((x0 - x0_goal) ** 2 + (y0 - y0_goal) ** 2) ** 0.5
+    dist_0_next = ((x0 - move[0] - x0_goal) ** 2 +
+                   (y0 - move[1] - y0_goal) ** 2) ** 0.5
 
-    return nmax_swap_distance(puzzle, goal, size) - \
-        nmax_swap_distance(puzzle_before, goal, size)
+    number = puzzle[x0 - move[0]][y0 - move[1]]
+    xnumber_goal, ynumber_goal = find_number(goal, size, number)
+    dist_number_cur = ((x0 - move[0] - xnumber_goal) ** 2 +
+                       (y0 - move[1] - ynumber_goal) ** 2) ** 0.5
+    dist_number_next = ((x0 - xnumber_goal) ** 2 +
+                        (y0 - ynumber_goal) ** 2) ** 0.5
+
+    return -(dist_0_next - dist_0_cur + dist_number_next - dist_number_cur)
 
 
-def nmax_swap_distance(puzzle, goal, size):
-    puzzle_1d = array2d_to_array1d(puzzle, size)
-    goal_1d = array2d_to_array1d(goal, size)
-    location = [puzzle_1d.index(goal_1d[i]) for i in range(size * size)]
-    n = int(size / 2) * size + int((size - 1) / 2)
-    perm = 0
-
-    while puzzle_1d != goal_1d:
-
-        if location[n] == n:
-            i = 0
-            while i < size * size - 1:
-                if goal_1d[i] in puzzle_1d[i + 1:]:
-                    break
-                i += 1
-            puzzle_1d[location[i]], puzzle_1d[location[n]] = \
-                puzzle_1d[location[n]], puzzle_1d[location[i]]
-            location[i], location[n] = location[n], location[i]
-
-        else:
-            puzzle_1d[location[location[n]]], puzzle_1d[location[n]] = \
-                puzzle_1d[location[n]], puzzle_1d[location[location[n]]]
-            location[location[n]], location[n] = \
-                location[n], location[location[n]]
-        perm += 1
-    return perm
+def euclidian_distance(puzzle, goal, size):
+    distance = 0
+    for x, y in itertools.product(range(size), repeat=2):
+        x_puzzle, y_puzzle = find_number(puzzle, size, goal[x][y])
+        distance += ((x - x_puzzle) ** 2 + (y - y_puzzle) ** 2) ** 0.5
+    return distance
 
 
 def manhattan_distance_change(puzzle, move, goal, size):
@@ -124,18 +111,22 @@ def row_column_distance_change(puzzle, move, goal, size):
     y0_goal = int(size / 2)
     xn_goal, yn_goal = find_number(goal, size, puzzle[xn_puzzle][yn_puzzle])
 
-    if x0_puzzle == x0_goal and xn_puzzle != x0_goal or \
-            xn_puzzle == xn_goal and x0_puzzle != xn_goal:
+    if x0_puzzle == x0_goal and xn_puzzle != x0_goal:
         distance_change -= 1
-    elif x0_puzzle != x0_goal and xn_puzzle == x0_goal or\
-            xn_puzzle != xn_goal and x0_puzzle == xn_goal:
+    if xn_puzzle == xn_goal and x0_puzzle != xn_goal:
+        distance_change -= 1
+    if x0_puzzle != x0_goal and xn_puzzle == x0_goal:
+        distance_change += 1
+    if xn_puzzle != xn_goal and x0_puzzle == xn_goal:
         distance_change += 1
 
-    if y0_puzzle == y0_goal and yn_puzzle != y0_goal or \
-            yn_puzzle == yn_goal and y0_puzzle != yn_goal:
+    if y0_puzzle == y0_goal and yn_puzzle != y0_goal:
         distance_change -= 1
-    elif y0_puzzle != y0_goal and yn_puzzle == y0_goal or\
-            yn_puzzle != yn_goal and y0_puzzle == yn_goal:
+    if yn_puzzle == yn_goal and y0_puzzle != yn_goal:
+        distance_change -= 1
+    if y0_puzzle != y0_goal and yn_puzzle == y0_goal:
+        distance_change += 1
+    if yn_puzzle != yn_goal and y0_puzzle == yn_goal:
         distance_change += 1
 
     return distance_change
@@ -333,22 +324,22 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Choose your heuristic.',
                                      epilog='(´・ω・`)')
 
-    parser.add_argument('heuristic', metavar='heuristic',
-                        choices=['manhattan', 'row-column', 'nmax-swap'],
-                        help='manhattan | row-column | nmax-swap')
-
     group = parser.add_mutually_exclusive_group()
 
     group.add_argument(
-        '--file', nargs='?',
+        '-f', '--file', nargs='?',
         help='read a specific file and not a random generated map')
     group.add_argument(
-        '--size', nargs='?', type=int, default=3,
-        help='change the size of the random generated map (default : 3)')
+        '-s', '--size', nargs='?', type=int, default=3,
+        help='change the size of the random generated map (default: 3)')
     parser.add_argument(
-        'algorithm', metavar='algorithm',
+        '-H', '--heuristic', metavar='heuristic', default='manhattan',
+        choices=['manhattan', 'row-column', 'euclidian'],
+        help='manhattan | row-column | euclidian (default: manhattan)')
+    parser.add_argument(
+        '-a', '--algorithm', metavar='algorithm', default='greedy',
         choices=['uniform-cost', 'greedy', 'both'],
-        help='uniform-cost | greedy | both')
+        help='uniform-cost | greedy | both (default: greedy)')
 
     args = parser.parse_args()
 
@@ -409,20 +400,19 @@ if __name__ == '__main__':
     heuristic = args.heuristic
 
     [print(puzzle[i]) for i in range(size)]
-    print('hamming:', hamming_distance(puzzle, goal, size))
     print('manhattan:', manhattan_distance(puzzle, goal, size))
     print('row_column:', row_column_distance(puzzle, goal, size))
+    print('euclidian:', euclidian_distance(puzzle, goal, size))
 
-    print(nmax_swap_distance(puzzle, goal, size))
     if heuristic == 'manhattan':
         distance = manhattan_distance
         distance_change = manhattan_distance_change
     elif heuristic == 'row-column':
         distance = row_column_distance
         distance_change = row_column_distance_change
-    elif heuristic == 'nmax-swap':
-        distance = nmax_swap_distance
-        distance_change = nmax_swap_distance_change
+    elif heuristic == 'euclidian':
+        distance = euclidian_distance
+        distance_change = euclidian_distance_change
 
     if is_solvable(puzzle, goal, size):
         algorithm = args.algorithm
@@ -431,7 +421,7 @@ if __name__ == '__main__':
                 puzzle, goal, size, distance, distance_change, False)
             print(number_selected, number_opened, len(path), '\n', path)
         if algorithm in ['greedy', 'both']:
-            path, number_selected, number_opened = astar(
+            path, number_selected, number_opened = astar_bidirectionnal(
                 puzzle, goal, size, distance, distance_change)
             print(number_selected, number_opened, len(path), '\n', path)
     else:

@@ -269,12 +269,6 @@ def astar_bidirectionnal(puzzle, goal, size, distance, distance_change,
             opened_start.sort(key=lambda x: (len(x[1]), x[2]))
             opened_end.sort(key=lambda x: (len(x[1]), x[2]))
 
-        # [print(state) for state in opened_start]
-        # print()
-        # [print(state) for state in opened_end]
-        # print()
-        # print()
-
         cur_state_start = opened_start.pop(0)
         cur_state_end = opened_end.pop(0)
         number_selected += 2
@@ -320,7 +314,72 @@ def astar_bidirectionnal(puzzle, goal, size, distance, distance_change,
     return success, number_selected, number_opened
 
 
+def read_args(args):
+
+    if not args.file:
+        puzzle = generator.make_puzzle(args.size)
+        size = args.size
+    else:
+        puzzle = []
+        size = 0
+        try:
+            with open(args.file, mode='r') as file_open:
+                for line in file_open:
+                    temp_array = []
+                    line_split = line.split()
+                    if len(puzzle) == size and size > 0 and\
+                            line_split[0][0] != '#':
+                        print('Invalid data format')
+                        exit(0)
+                    if (len(line_split) > size and
+                        line_split[size][0] == '#') or \
+                            line_split[0][0] == '#' or \
+                            len(line_split) == size or \
+                            (len(line_split) == 1 and size == 0) or \
+                            (size == 0 and len(line_split) > 1 and
+                             line_split[1][0] == '#'):
+                        if line_split[0][0] == '#':
+                            continue
+                        if size == 0:
+                            size = int(line_split[0])
+                        elif size > 0:
+                            for array in range(0, size):
+                                try:
+                                    temp_array.append(int(line_split[array]))
+                                except ValueError:
+                                    print('Invalid value in the puzzle')
+                                    exit(0)
+                            puzzle.append(temp_array)
+                    else:
+                        print('Unexpected error')
+                        exit(0)
+        except OSError:
+            print('Fail to open the file')
+            exit(0)
+
+    return(puzzle, size)
+
+
+def print_result(result):
+
+    path, number_selected, number_opened = result
+
+    print('Number of path opened :')
+    print(number_opened)
+    print('Number of path selected :')
+    print(number_selected)
+    print('Length of the path :')
+    print(len(path))
+    print('Path :')
+    print(path)
+
+
 if __name__ == '__main__':
+
+    """
+    usage: npuzzle.py [-h] [-f [FILE] | -s [SIZE]] [-H heuristic] [-a algorithm]
+    """
+
     parser = argparse.ArgumentParser(description='Choose your heuristic.',
                                      epilog='(´・ω・`)')
 
@@ -343,86 +402,35 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    puzzle = []
-    size = 0
-
-    if not args.file:
-        puzzle = generator.make_puzzle(args.size)
-        size = args.size
-    else:
-        try:
-            with open(args.file, mode='r') as file_open:
-                for line in file_open:
-                    temp_array = []
-                    line_split = line.split()
-                    if len(puzzle) == size and size > 0 and\
-                            line_split[0][0] != '#':
-                        print('invalid file 3')
-                        exit(0)
-                    if (len(line_split) > size and
-                        line_split[size][0] == '#') or \
-                            line_split[0][0] == '#' or \
-                            len(line_split) == size or \
-                            (len(line_split) == 1 and size == 0) or \
-                            (size == 0 and len(line_split) > 1 and
-                             line_split[1][0] == '#'):
-                        if line_split[0][0] == '#':
-                            continue
-                        if size == 0:
-                            size = int(line_split[0])
-                        elif size > 0:
-                            for array in range(0, size):
-                                try:
-                                    temp_array.append(int(line_split[array]))
-                                except ValueError:
-                                    print('invalid file 1')
-                                    exit(0)
-                            puzzle.append(temp_array)
-                    else:
-                        print('invalid file 2')
-                        exit(0)
-        except OSError:
-            print('fail to open the file')
-            exit(0)
+    puzzle, size = read_args(args)
 
     goal = generator.make_goal(size)
-    # puzzle = [[4, 1, 3],
-    #           [0, 7, 5],
-    #           [2, 8, 6]]
-    puzzle = [[5, 6, 7],
-              [4, 0, 8],
-              [3, 2, 1]]
-    # puzzle = [[1, 2, 3, 4, 5],
-    #           [16, 17, 22, 19, 6],
-    #           [15, 20, 0, 24, 7],
-    #           [14, 23, 18, 21, 8],
-    #           [13, 12, 11, 10, 9]]
-    heuristic = args.heuristic
 
+    """
+    puzzle example = [[5, 6, 7],
+                      [4, 0, 8],
+                      [3, 2, 1]]
+    """
+
+    print('Initiale puzzle :')
     [print(puzzle[i]) for i in range(size)]
-    print('manhattan:', manhattan_distance(puzzle, goal, size))
-    print('row_column:', row_column_distance(puzzle, goal, size))
-    print('euclidian:', euclidian_distance(puzzle, goal, size))
 
-    if heuristic == 'manhattan':
+    if args.heuristic == 'manhattan':
         distance = manhattan_distance
         distance_change = manhattan_distance_change
-    elif heuristic == 'row-column':
+    elif args.heuristic == 'row-column':
         distance = row_column_distance
         distance_change = row_column_distance_change
-    elif heuristic == 'euclidian':
+    elif args.heuristic == 'euclidian':
         distance = euclidian_distance
         distance_change = euclidian_distance_change
 
     if is_solvable(puzzle, goal, size):
-        algorithm = args.algorithm
-        if algorithm in ['uniform-cost', 'both']:
-            path, number_selected, number_opened = astar_bidirectionnal(
-                puzzle, goal, size, distance, distance_change, False)
-            print(number_selected, number_opened, len(path), '\n', path)
-        if algorithm in ['greedy', 'both']:
-            path, number_selected, number_opened = astar_bidirectionnal(
-                puzzle, goal, size, distance, distance_change)
-            print(number_selected, number_opened, len(path), '\n', path)
+        if args.algorithm in ['uniform-cost', 'both']:
+            print_result(astar_bidirectionnal(
+                puzzle, goal, size, distance, distance_change, False))
+        if args.algorithm in ['greedy', 'both']:
+            print_result(astar_bidirectionnal(
+                puzzle, goal, size, distance, distance_change))
     else:
         print('Puzzle not solvable.')

@@ -3,11 +3,12 @@ import itertools
 import generator
 import argparse
 
+
 MOVE = {'U': (-1, 0), 'D': (1, 0), 'L': (0, -1), 'R': (0, 1)}
+FILE = 'redundant_move_7_12.txt'
 
 
 def array2d_to_array1d(array_2d, size):
-
     array_1d = []
 
     for x in range(size):
@@ -18,7 +19,6 @@ def array2d_to_array1d(array_2d, size):
 
 
 def is_solvable(puzzle, goal, size):
-
     puzzle_1d = array2d_to_array1d(puzzle, size)
     goal_1d = array2d_to_array1d(goal, size)
 
@@ -26,19 +26,18 @@ def is_solvable(puzzle, goal, size):
 
     for value in goal_1d:
         try:
-            for prev_value, next_value \
-                    in itertools.product(puzzle_1d[:puzzle_1d.index(value)],
-                                         goal_1d[goal_1d.index(value):]):
+            values = itertools.product(puzzle_1d[:puzzle_1d.index(value)],
+                                       goal_1d[goal_1d.index(value):]):
+            for prev_value, next_value in values:
                 if prev_value == next_value:
                     n += 1
         except ValueError:
-            print('invalid file')
-            exit(0)
+            raise NPuzzleError('invalid file')
 
     x_puzzle, y_puzzle = find_number(puzzle, size, 0)
     x_goal, y_goal = find_number(goal, size, 0)
 
-    if n % 2 == (abs(x_puzzle - x_goal) + abs(y_puzzle - y_goal)) % 2:
+    if n % 2 == ((abs(x_puzzle - x_goal) + abs(y_puzzle - y_goal)) % 2):
         return True
 
     return False
@@ -74,6 +73,7 @@ def euclidian_distance(puzzle, goal, size):
     for x, y in itertools.product(range(size), repeat=2):
         x_puzzle, y_puzzle = find_number(puzzle, size, goal[x][y])
         distance += ((x - x_puzzle) ** 2 + (y - y_puzzle) ** 2) ** 0.5
+
     return distance
 
 
@@ -85,8 +85,8 @@ def manhattan_distance_change(puzzle, move, goal, size):
 
     number = puzzle[x0 - move[0]][y0 - move[1]]
     xnumber_goal, ynumber_goal = find_number(goal, size, number)
-    dist_number_cur = abs(x0 - move[0] - xnumber_goal) + \
-        abs(y0 - move[1] - ynumber_goal)
+    dist_number_cur = (
+        abs(x0 - move[0] - xnumber_goal) + abs(y0 - move[1] - ynumber_goal)
     dist_number_next = abs(x0 - xnumber_goal) + abs(y0 - ynumber_goal)
 
     return -(dist_0_next - dist_0_cur + dist_number_next - dist_number_cur)
@@ -111,22 +111,22 @@ def row_column_distance_change(puzzle, move, goal, size):
     y0_goal = int(size / 2)
     xn_goal, yn_goal = find_number(goal, size, puzzle[xn_puzzle][yn_puzzle])
 
-    if x0_puzzle == x0_goal and xn_puzzle != x0_goal:
+    if (x0_puzzle == x0_goal) and (xn_puzzle != x0_goal):
         distance_change -= 1
-    if xn_puzzle == xn_goal and x0_puzzle != xn_goal:
+    if (xn_puzzle == xn_goal) and (x0_puzzle != xn_goal):
         distance_change -= 1
-    if x0_puzzle != x0_goal and xn_puzzle == x0_goal:
+    if (x0_puzzle != x0_goal) and (xn_puzzle == x0_goal):
         distance_change += 1
-    if xn_puzzle != xn_goal and x0_puzzle == xn_goal:
+    if (xn_puzzle != xn_goal) and (x0_puzzle == xn_goal):
         distance_change += 1
 
-    if y0_puzzle == y0_goal and yn_puzzle != y0_goal:
+    if (y0_puzzle == y0_goal) and (yn_puzzle != y0_goal):
         distance_change -= 1
-    if yn_puzzle == yn_goal and y0_puzzle != yn_goal:
+    if (yn_puzzle == yn_goal) and (y0_puzzle != yn_goal):
         distance_change -= 1
-    if y0_puzzle != y0_goal and yn_puzzle == y0_goal:
+    if (y0_puzzle != y0_goal) and (yn_puzzle == y0_goal):
         distance_change += 1
-    if yn_puzzle != yn_goal and y0_puzzle == yn_goal:
+    if (yn_puzzle != yn_goal) and (y0_puzzle == yn_goal):
         distance_change += 1
 
     return distance_change
@@ -141,6 +141,7 @@ def row_column_distance(puzzle, goal, size):
                 distance += 1
             if puzzle[i][j] not in [goal[x][j] for x in range(size)]:
                 distance += 1
+
     return distance
 
 
@@ -171,20 +172,11 @@ def hamming_distance(puzzle, goal, size):
 
 
 def move_piece(puzzle, x, y, move):
-
     new_puzzle = puzzle
     new_puzzle[x][y] = new_puzzle[x + move[0]][y + move[1]]
     new_puzzle[x + move[0]][y + move[1]] = 0
 
     return new_puzzle
-
-
-def reliable_move(move_1, move_2):
-    if not move_2 or \
-            MOVE[move_1][0] + MOVE[move_2][0] != 0 or \
-            MOVE[move_1][1] + MOVE[move_2][1] != 0:
-        return True
-    return False
 
 
 def next_states(cur_state, size, redundants):
@@ -208,6 +200,7 @@ def next_states(cur_state, size, redundants):
                     for x in range(size)],
                     [cur_move for cur_move in cur_state[1]] + [move]]
                    for move in move_possible]
+
     return [[move_piece(next_states[i][0], x, y, MOVE[next_states[i][1][-1]]),
              next_states[i][1], cur_state[2], 0]
             for i in range(len(next_states))]
@@ -219,14 +212,11 @@ def astar(puzzle, goal, size, distance, distance_change):
     closed = []
     number_opened = 1
     number_selected = 0
-    with open('redundant_move_7_12.txt', mode='rb') as f:
+    with open(FILE, mode='rb') as f:
         redundants = pickle.load(f)
 
     while opened:
         opened.sort(key=lambda x: (x[2], len(x[1])))
-
-        # [print(state) for state in opened]
-        # print()
 
         cur_state = opened.pop(0)
         number_selected += 1
@@ -246,11 +236,12 @@ def join_path(state_start, state_end):
     reverse = {'L': 'R', 'R': 'L', 'U': 'D', 'D': 'U'}
     for i in range(len(state_end)):
         state_start += reverse[state_end[-i - 1]]
+
     return state_start
 
 
-def astar_bidirectionnal(puzzle, goal, size, distance, distance_change,
-                         greedy=True):
+def astar_bidirectionnal(puzzle, goal, size, distance, distance_change,                         greedy=True):
+
     distance_init = distance(puzzle, goal, size)
     opened_start = [[puzzle, [], distance_init, distance_init]]
     closed_start = []
@@ -258,7 +249,7 @@ def astar_bidirectionnal(puzzle, goal, size, distance, distance_change,
     closed_end = []
     number_opened = 2
     number_selected = 0
-    with open('redundant_move_7_12.txt', mode='rb') as f:
+    with open(FILE, mode='rb') as f:
         redundants = pickle.load(f)
 
     while opened_start and opened_end:
@@ -315,7 +306,6 @@ def astar_bidirectionnal(puzzle, goal, size, distance, distance_change,
 
 
 def read_args(args):
-
     if not args.file:
         puzzle = generator.make_puzzle(args.size)
         size = args.size
@@ -327,17 +317,16 @@ def read_args(args):
                 for line in file_open:
                     temp_array = []
                     line_split = line.split()
-                    if len(puzzle) == size and size > 0 and\
-                            line_split[0][0] != '#':
-                        print('Invalid data format')
-                        exit(0)
-                    if (len(line_split) > size and
-                        line_split[size][0] == '#') or \
-                            line_split[0][0] == '#' or \
-                            len(line_split) == size or \
-                            (len(line_split) == 1 and size == 0) or \
-                            (size == 0 and len(line_split) > 1 and
-                             line_split[1][0] == '#'):
+                    if len(puzzle) == size and size > 0 and (
+                            line_split[0][0] != '#'):
+                        raise NPuzzleError('Invalid data format')
+                    if (len(line_split) > size and (
+                            line_split[size][0] == '#') or (
+                            line_split[0][0] == '#') or (
+                            len(line_split) == size) or (
+                            len(line_split) == 1 and size == 0) or (
+                            size == 0 and len(line_split) > 1 and
+                            line_split[1][0] == '#')):
                         if line_split[0][0] == '#':
                             continue
                         if size == 0:
@@ -347,21 +336,17 @@ def read_args(args):
                                 try:
                                     temp_array.append(int(line_split[array]))
                                 except ValueError:
-                                    print('Invalid value in the puzzle')
-                                    exit(0)
+                                    raise NPuzzleError('Invalid value in the puzzle')
                             puzzle.append(temp_array)
                     else:
-                        print('Unexpected error')
-                        exit(0)
+                        raise NPuzzleError('Unexpected error')
         except OSError:
-            print('Fail to open the file')
-            exit(0)
+            raise NPuzzleError('Fail to open the file')
 
     return(puzzle, size)
 
 
 def print_result(result):
-
     path, number_selected, number_opened = result
 
     print('Number of path opened :')
@@ -374,7 +359,7 @@ def print_result(result):
     print(path)
 
 
-if __name__ == '__main__':
+def main():
 
     """
     usage: npuzzle.py [-h] [-f [FILE] | -s [SIZE]] [-H heuristic] [-a algorithm]
@@ -434,3 +419,7 @@ if __name__ == '__main__':
                 puzzle, goal, size, distance, distance_change))
     else:
         print('Puzzle not solvable.')
+
+
+if __name__ == '__main__':
+    main()

@@ -5,10 +5,12 @@ import itertools
 def make_goal(size):
     puzzle = [[0 for x in range(size)] for y in range(size)]
     n = 1
-    x_start = y_start = 0
-    x_end = y_end = size - 1
+    x_start = 0
+    y_start = 0
+    x_end = size - 1
+    y_end = size - 1
 
-    while n < size * size:
+    while n < (size ** 2):
         for y in range(y_start, y_end + 1):
             puzzle[x_start][y] = n
             n += 1
@@ -31,7 +33,7 @@ def make_goal(size):
     return puzzle
 
 
-def make_puzzle(size, solvable=True):
+def make_puzzle(size, permutations=10000):
     random.seed()
     puzzle = make_goal(size)
     for x, y in itertools.product(range(size), repeat=2):
@@ -39,7 +41,7 @@ def make_puzzle(size, solvable=True):
             zero = (x, y)
             break
 
-    for i in range(10000):
+    for i in range(permutations):
         possibilities = []
         if zero[0] != 0:
             possibilities.append((-1, 0))
@@ -51,15 +53,9 @@ def make_puzzle(size, solvable=True):
             possibilities.append((0, 1))
 
         choice = random.choice(possibilities)
-        puzzle[zero[0]][zero[1]] = puzzle[zero[0] + choice[0]][zero[1] +
-                                                               choice[1]]
+        puzzle[zero[0]][zero[1]] = (
+            puzzle[zero[0] + choice[0]][zero[1] + choice[1]])
         puzzle[zero[0] + choice[0]][zero[1] + choice[1]] = 0
         zero = (zero[0] + choice[0], zero[1] + choice[1])
-
-    if not solvable:
-        if puzzle[0][0] == 0 or puzzle[0][1] == 0:
-            puzzle[-1][-1], puzzle[-1][-2] = puzzle[-1][-2], puzzle[-1][-1]
-        else:
-            puzzle[0][0], puzzle[0][1] = puzzle[0][1], puzzle[0][0]
 
     return puzzle
